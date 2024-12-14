@@ -1,0 +1,32 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_container
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_DATABASE}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb:/db
+
+  chatbot:
+    build: ./chatbot
+    container_name: procurement_chatbot
+    depends_on:
+      - mongodb
+    environment:
+      - MONGO_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin
+      - DATASET_PATH=/app/dataset/purchase.csv
+      - MONGO_DATABASE=${MONGO_DATABASE}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./dataset:/app/dataset
+    
+
+
+volumes:
+  mongodb:
