@@ -1,23 +1,26 @@
-from langchain.llms import OpenAI
-from langchain.prompts import PromptTemplate
-from langchain.output_parsers import PydanticOutputParser
-from langchain.chains import LLMChain
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-import json
 import os
+import json
+
 from dotenv import load_dotenv
+from langchain.llms import OpenAI
+from langchain.chains import LLMChain
+from typing import List, Dict, Any
+from langchain.prompts import PromptTemplate
 
 class MongoQueryGenerator:
     def __init__(self):
         load_dotenv()
         
-        # Initialize OpenAI
         self.llm = OpenAI(
             model_name="gpt-4o",  
             temperature=0,  # Lower temperature for more precise outputs
             openai_api_key=os.getenv('OPENAI_API_KEY')
         )
+
+        # Code to get random examples for each feature
+        # for column_name in df.columns:
+        #     v = df[column_name].dropna().unique()
+        #     print( "Feature: ", column_name, " Value: ", v[0], " Type: ", df[column_name].dtype)
         
         # Define the schema information
         self.schema_info = """
@@ -25,49 +28,70 @@ class MongoQueryGenerator:
 
         Collection: procurement_data
         Fields:
-        - creation_date (datetime): System date when purchase order is entered
+        - creation_date (string): System date when purchase order is entered.
         Example: "08/27/2013"
-        - purchase_date (datetime): Date of purchase order entered by user
+        - purchase_date (string): Date of purchase order is entered by the user.  This date can be back dated; therefore the creation date is primarily used.
         Example: "08/15/2013"
-        - fiscal_year (string): State of CA fiscal year (July 1-June 30)
-        Example: "2013/2014"
-        - lpa_number (string): Leveraged Procurement Agreement/Contract Number
-        Example: "1-19-70-01A"
-        - purchase_order_number (string): PO identifier
-        Example: "P132000012345"
-        - requisition_number (string): Internal request number
-        Example: "REQ-1234"
-        - acquisition_type (string): IT Goods, IT Services, Non-IT Goods, Non-IT Services
+        - fiscal_year (string): Fiscal year derived based on creation date. State of California fiscal year starts on July 1 and ends on June 30.
+        Example: "2013-2014"
+        - lpa_number (string): Leveraged Procurement Agreement (LPA) Number, aka Contract Number.  If there is a contract number in this field, the amount is considered contract spend.
+        Example: "7-12-70-26"
+        - purchase_order_number (string): Purchase Order Number, numbers are not unique, different departments can have same purchase order number.
+        Example: "REQ0011118"
+        - requisition_number (string): Requisition Number, numbers are not unique, different departments can have same purchase order number.
+        Example: "REQ0011118"
+        - acquisition_type (string): Type of Acquisition: Non-IT Goods, Non-IT Services, IT Goods, IT Services
         Example: "IT Goods"
-        - sub_acquisition_type (string): Sub-category of acquisition type
-        Example: "Hardware"
-        - acquisition_method (string): Procurement method
-        Example: "Competitive Bid"
-        - sub_acquisition_method (string): Sub-category of procurement method
-        Example: "Invitation for Bid"
-        - department_name (string): Name of purchasing department
-        Example: "Department of Technology"
+        - sub_acquisition_type (string): A sub-acquisition type depends on the acquisition type used.
+        Example: "Personal Services"
+        - acquisition_method (string): Type of acquisition used to make purchase.
+        Example: "WSCA/Coop"
+        - sub_acquisition_method (string): A sub-acquisition method depends on the acquisition method used.
+        Example: "Other"
+        - department_name (string): Name of purchasing department.
+        Example: "Consumer Affairs, Department of"
+        - supplier_code (float): Supplier Code
+        Example: 1740272.0
         - supplier_name (string): Supplier name
-        Example: "ABC Inc."
-        - supplier_qualifications (string): SB, SBE, DVBE, NP, MB certifications
-        Example: "SB, DVBE"
-        - item_name (string): Name of purchased items
+        Example: "Pitney Bowes"
+        - supplier_qualifications (string): Identifies supplier qualifications as a certified small business (SB), small business enterprise (SBE), disabled veteran business enterprise (DVBE), non-profits (NP), and micro business (MB). These qualifications are not mutually exclusive a supplier can be any combination of these. 
+        Example: "CA-MB CA-SB"
+        - supplier_zip_code (number): Suplier Zip Code.
+        Example: 95811
+        - calcard (string): State credit card (CalCard) used for purchased? YES/NO.
+        Example: "NO"
+        - item_name (string): Name of purchased items.
         Example: "Laptops"
-        - item_description (string): Description of purchased items
+        - item_description (string): Description of purchased items.
         Example: "15-inch laptops with 16GB RAM"
         - quantity (number): Quantity of items
         Example: 100
-        - unit_price (number): Price per unit
+        - unit_price (number): Price per unit.
         Example: 1500.00
-        - total_price (number): Total price excluding taxes/shipping
+        - total_price (number): Total price excluding taxes/shipping.
         Example: 150000.00
-        - normalized_unspsc (string): Normalized UNSPSC code
-        Example: "43211503"
-        - commodity_title (string): Title of the commodity
-        Example: "Notebook Computers"
-        - classification_codes (string): UNSPSC codes
-        Example: "43211503"
+        - classification_codes (number): United Nations Standard Products and Services Code® (UNSPSC) v. 14 of items purchased. This field may have more than one UNSPSC number based on the line items in the purchase order entered into eSCPRS.
+        Example: 14111507
+        - normalized_unspsc (float): Normalized UNSPSC code
+        Example: 76121504.0
+        - commodity_title (string): Correlated commodity tile based on the 8 digit Normalized UNSPSC.
+        Example: "Jalapeno peppers"
+        - class (float): Correlated class number based on the 8 digit normalized UNSPSC.
+        Example: 50405600.0
+        - class_title (string): Correlated class title based on the 8 digit Normalized UNSPSC 
+        Example: "Peppers"
+        - family (float): Correlated family number based on the 8 digit Normalized UNSPSC
+        Example: 50400000.0
+        - family_title (string):  Correlated family title based on the 8 digit Normalized UNSPSC
+        Example: "Fresh vegetables"
+        - segment (float):  Correlated segment number based on the 8 digit Normalized UNSPSC
+        Example: 50000000.0
+        - segment_title (string):  Correlated segment title based on the 8 digit Normalized UNSPSC
+        Example: "Food Beverage and Tobacco Products"
+        - location (string): location of the purchase 
+        Example: "(38.662263, -121.346136)"
 
+        
         Make sure to follow up with the format given in the examples here when you want to query the database.
 
         Important Notes:
@@ -109,27 +133,12 @@ class MongoQueryGenerator:
             template=self.query_template
         )
         
-        # Create the chain
         self.chain = LLMChain(
             llm=self.llm,
             prompt=self.prompt
         )
     
-    async def generate_query(self, question: str) -> List[Dict[str, Any]]:
-        """
-        Generate MongoDB aggregation pipeline from natural language question
-        
-        Args:
-            question (str): Natural language question about procurement data
-            
-        Returns:
-            List[Dict]: MongoDB aggregation pipeline
-        """
-
-        print("In generate_query")
-        # Generate the query
-        
-        
+    async def generate_query(self, question: str) -> List[Dict[str, Any]]:        
         try:
             response = await self.chain.arun({
                 "schema": self.schema_info,
@@ -148,59 +157,8 @@ class MongoQueryGenerator:
             print(f"An error occurred: {str(e)}")
 
     def execute_query(self, db, pipeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Execute generated MongoDB pipeline
-        
-        Args:
-            db: MongoDB database instance
-            pipeline (List[Dict]): Aggregation pipeline to execute
-            
-        Returns:
-            List[Dict]: Query results
-        """
         try:
             results = list(db.procurement_data.aggregate(pipeline))
             return results
         except Exception as e:
             raise Exception(f"Error executing MongoDB query: {str(e)}")
-
-class QueryValidator:
-    """
-    Validate and sanitize MongoDB queries before execution
-    """
-    @staticmethod
-    def validate_pipeline(pipeline: List[Dict[str, Any]]) -> bool:
-        """
-        Basic validation of MongoDB pipeline
-        
-        Args:
-            pipeline (List[Dict]): Pipeline to validate
-            
-        Returns:
-            bool: True if pipeline is valid
-        """
-        # List of allowed MongoDB operators
-        allowed_operators = {
-            "$match", "$group", "$sort", "$limit", "$project", 
-            "$unwind", "$lookup", "$dateToString", "$sum", "$avg"
-        }
-        
-        def check_dict(d: Dict) -> bool:
-            for key, value in d.items():
-                if key.startswith("$"):
-                    if key not in allowed_operators:
-                        return False
-                if isinstance(value, dict):
-                    if not check_dict(value):
-                        return False
-            return True
-        
-        try:
-            for stage in pipeline:
-                if not isinstance(stage, dict):
-                    return False
-                if not check_dict(stage):
-                    return False
-            return True
-        except Exception:
-            return False
