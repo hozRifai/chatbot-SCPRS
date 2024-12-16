@@ -3,7 +3,7 @@ import json
 
 
 from dotenv import load_dotenv
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from src.query_generator import MongoQueryGenerator
 
 from langchain.llms import OpenAI
@@ -16,14 +16,12 @@ class ProcurementAssistant:
         load_dotenv()
         self.db = db
         
-        # Initialize OpenAI LLM
         self.llm = OpenAI(
             model_name="gpt-4o",  
             temperature=0.7,
             openai_api_key=os.getenv('OPENAI_API_KEY')
         )
         
-        # System context about the procurement system
         self.system_context = """
         You are a procurement assistant who helps users understand and analyze California state procurement data.
         You can both answer general questions about procurement and analyze specific data from the database.
@@ -42,7 +40,6 @@ class ProcurementAssistant:
         4. Provide insights and recommendations
         """
         
-        # Template incorporating system context
         self.prompt_template = PromptTemplate(
             input_variables=["prompt"],
             template=f"""
@@ -52,14 +49,12 @@ class ProcurementAssistant:
             {{prompt}}
             """
         )
-        
-        # Create the chain
+
         self.chain = LLMChain(
             llm=self.llm,
             prompt=self.prompt_template
         )
         
-        # Template for classifying message type
         self.query_classifier_template = PromptTemplate(
             input_variables=["message"],
             template="""
@@ -85,35 +80,19 @@ class ProcurementAssistant:
 
     
     async def process_message(self, message: str) -> Dict[str, Any]:
-        """
-        Process any type of user message
-        
-        Args:
-            message (str): User's message
-            
-        Returns:
-            Dict: Response with appropriate content
-        """
         try:
-            print("message", message)
-            # First, classify the message type
             message_type = await self._classify_message(message)
-            print("message_type", message_type)
 
             if message_type["type"] == "query":
-                # Handle data query
                 return await self._handle_data_query(message)
             
             elif message_type["type"] == "general":
-                # Handle general procurement question
                 return await self._handle_general_question(message)
             
             elif message_type["type"] == "chat":
-                # Handle conversational message
                 return await self._handle_chat(message)
             
-            else:  # clarify
-                # Ask for clarification
+            else:
                 return await self._request_clarification(message)
                 
         except Exception as e:
@@ -123,11 +102,7 @@ class ProcurementAssistant:
             }
     
     async def _classify_message(self, message: str) -> Dict[str, Any]:
-        """
-        Classify the type of user message
-        """
         try:
-            # Generate response using LangChain's OpenAI wrapper
             response = await self.classifier_chain.arun({
                 "message": message
             })
@@ -145,31 +120,17 @@ class ProcurementAssistant:
                 
         except Exception as e:
             print(f"Classification error: {str(e)}")
-            # Fallback to chat type if classification fails
             return {
                 "type": "chat",
                 "requires_data": False
             }
     
     async def _handle_data_query(self, message: str) -> Dict[str, Any]:
-        """
-        Handle messages requiring database queries using MongoQueryGenerator
-        
-        Args:
-            message (str): User's query message
-            
-        Returns:
-            Dict: Response with query results and natural language explanation
-        """
         try:
-            print("I am in data query")
-            # Use the MongoQueryGenerator to create and execute the query
             query_generator = MongoQueryGenerator()
             pipeline = await query_generator.generate_query(message)
             results = query_generator.execute_query(self.db, pipeline)
             
-            print("results in handle data is : ", results)
-            # Generate natural language response using GPT
             response_prompt = f"""
             Given this user question: "{message}"
             And these query results: {str(results)[:1500]}  # Limit result length for prompt
@@ -190,9 +151,9 @@ class ProcurementAssistant:
             return {
                 "success": True,
                 "response": response_text,
-                "data": results[:100],  # Limit results for API response
+                "data": results[:10],  # Limit results for API response
                 "type": "data_query",
-                "query": pipeline  # Include the generated pipeline for debugging
+                "query": pipeline  # debugging
             }
             
         except Exception as e:
@@ -203,7 +164,6 @@ class ProcurementAssistant:
             }
     
     async def _handle_general_question(self, message: str) -> Dict[str, Any]:
-        """Handle general procurement questions"""
         prompt = f"""
         Using your knowledge about procurement and the California state procurement system, answer this question:
         {message}
@@ -227,7 +187,6 @@ class ProcurementAssistant:
         }
     
     async def _handle_chat(self, message: str) -> Dict[str, Any]:
-        """Handle conversational messages"""
         try:
             prompt = f"""
             As a helpful procurement assistant, respond to this message:
@@ -256,7 +215,6 @@ class ProcurementAssistant:
             }
         
     async def _request_clarification(self, message: str) -> Dict[str, Any]:
-        """Handle messages needing clarification"""
         prompt = f"""
         Create a response that:
         1. Acknowledges the user's message: {message}

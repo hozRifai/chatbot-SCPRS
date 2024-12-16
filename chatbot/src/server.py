@@ -1,11 +1,14 @@
+import os
+import uvicorn
+
+
+from typing import Optional
+from pydantic import BaseModel
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
 from src.chat_assistant import ProcurementAssistant
 from src.data_manager import ProcurementDataManager
-from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -24,11 +27,10 @@ app.add_middleware(
     allow_headers=["*"],  
 )
 
-# Initialize data manager and assistant
 data_manager = ProcurementDataManager()
 assistant = ProcurementAssistant(data_manager.db)
 
-# Pydantic models for request/response
+
 class ChatMessage(BaseModel):
     message: str
 
@@ -78,5 +80,4 @@ async def health_check():
     return {"status": "healthy", "version": "1.0.0", "message": "Service is running"}
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
